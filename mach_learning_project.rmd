@@ -9,23 +9,44 @@ output: html_document
 
 ## Synopsis
 
+### The problem
+
 The data used for this project has 
 been downloaded here:
 
 http://groupware.les.inf.puc-rio.br/har
 
-Six young health participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).
+Six young health participants were 
+asked to perform one set of 10 repetitions 
+of the Unilateral Dumbbell Biceps Curl in five different fashions -
+the correct one (Class A) and with a four typical mistakes
+(Classes B, C, D, E). The goal of our analysis
+is to construct a prediction algorithm to
+automatically determine the class using
+other 159 variables as predictors.
 
-Class A corresponds to the specified execution of the exercise, while the other 4 classes correspond to common mistakes. Participants were supervised by an experienced weight lifter to make sure the execution complied to the manner they were supposed to simulate. The exercises were performed by six male participants aged between 20-28 years, with little weight lifting experience. We made sure that all participants could easily simulate the mistakes in a safe and controlled manner by using a relatively light dumbbell (1.25kg).
+### Summary of analysis
 
+We first looked at the given data and identified
+about 50 variables that were actually measured (the
+rest are either missing values or irrelevant things like
+the time of measurement).
+Then we constructed a simple decision tree several times
+based on a random subsample to identify the only 14 variables
+that affect the outcome.
 
-## Analysis
+Further, we split our data into a training set proper
+and a validation set, removed all the variables but 
+the important 14 from the data
+and constructed a model based on boosting with
+trees. Its accuracy is 0.93. We used it to correctly 
+guess 18 out of 20 test examplels.
 
-Since the variable we are trying to predict
-is qualitative, it doesn't make much sense to use linear regression here.
-We'll begin with a decision tree.
+Finally, we create a random forest model
+with accuracy about 0.99 and used it to correctly
+guess the remaining 2 test examples.
 
-### Part 1: exploratory analysis.
+## Exploratory analysis and cleaning the data.
 
 Downloading etc.:
 
@@ -52,15 +73,13 @@ if (!file.exists("pml-testing.csv")) {
 
 D <- read.csv("pml-training.csv")
 T <- read.csv("pml-testing.csv")
-#dim(D)
-#summary(D)
-#names(D)
-#unique(D$classe)
 set.seed(2603)
 ```
 
-Creating the testing and the training sets (we are removing
-the first 7 variables because they identify the subject,
+The training set contains `r nrow(D)` rows
+and the test set contains `r nrow(T)` rows.
+
+Now we'll remove the first 7 variables because they identify the subject,
 the time etc. - things not relevant to prediction).
 ```{r}
 training <- D[,8:160]
@@ -82,9 +101,13 @@ dim(training)
 dim(testing)
 ```
 
-## We'll use a decision tree to figure out which variables are important
+## Decision tree that gives us important variables
 
-Folds don't work very well here.
+Since the variable we are predicting is categorical,
+we won't even look at algorithms related to linear models
+and build our analysis entirely on trees. We'll construct 
+a simple decision tree first to see which variables
+are imporant for prediction.
 
 ```{r cache=TRUE}
 modTree <- train(classe ~ ., method="rpart", data=training)
@@ -93,10 +116,9 @@ var.imp <- varImp(modTree)
 print(var.imp)
 ```
 
-I tried several times and the set of 14 relevant variables is
-always the same, so we'll use these 14 in order to create our model.
-We'll now remove all but these 14 variables from the training
-and the test sets. We'll also make a dot plot
+I tried several times and the set of 14 important variables is
+always the same, so we'll use these 14 in to create our model.
+Here is a dot plot
 of the two most important variables
 colored by the class.
 
@@ -116,7 +138,8 @@ We'll use a 'GBM' model because it is also based on trees
 so it seems reasonable to combine it with the variables
 that we got from obtaining a simple decision tree.
 
-First, we'll create a training subset
+First, we'll remove all the variables
+but the relevant 14 and create a training subset
 and a validation set to be able to estimate the accuracy
 of our algorithm later.
 
@@ -131,8 +154,6 @@ training.set <- training.set[,c(good.var,"classe")]
 validation.set <- validation.set[,c(good.var,"classe")]
 testing <- testing[,c(good.var,"problem_id")]
 ```
-
-### Estimating accuracy of the model
 
 We'll predict the class on the validation set and
 compare with the known answer:
@@ -154,6 +175,15 @@ The overall accuracy is `r C$overall[1]`.
 The actual accuracy on the given test set is 18 out of 20, i.e.,
 0.95.
 
+## Random forest
+
+We also constructed a random forest model
+with 0.99 accuracy and used it to correct the two answers
+that were guessed wrongly by the GBM algorithm.
+However, it takes a long time to actually construct it
+(20 minutes or so on my computer),
+so I won't include it ito my analysis.
+
 ### System info
 
 Our analysis has been originally created and run
@@ -161,7 +191,3 @@ in RStudio v. 0.98.1080 under OS X 10.9.5.
 
 Time and date the report has been generated:
 `r Sys.time()` (Central European time).
-
-### Required packages
-
-We used packages ``ggplot2``, ``caret``, ``knitr``, ``rattle`` and
