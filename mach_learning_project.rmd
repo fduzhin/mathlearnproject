@@ -150,7 +150,9 @@ Here is the whole confusion matrix
 C$table
 ```
 
-The overall accuracy is `{r} C$overall[1]`.
+The overall accuracy is `r C$overall[1]`.
+The actual accuracy on the given test set is 18 out of 20, i.e.,
+0.95.
 
 ### System info
 

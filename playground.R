@@ -123,11 +123,9 @@ predictLDA <- predict(modlda, newdata=validation.set)
 confusionMatrix(predictLDA,validation.set$classe)
 
 
+# Random forest
 
-
-# Bad attempt to do random forest
-
-modForest1 <- train(classe ~ ., method="rf", data=subtrain1)
+modForest <- train(classe ~ ., method="rf", data=training.set)
 
 
 
