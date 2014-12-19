@@ -1,0 +1,165 @@
+---
+output: html_document
+---
+
+# Automatic analysis of exercise quality
+### Machine learning, course project
+
+---------------------------------------------------------------------
+
+## Synopsis
+
+The data used for this project has 
+been downloaded here:
+
+http://groupware.les.inf.puc-rio.br/har
+
+Six young health participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).
+
+Class A corresponds to the specified execution of the exercise, while the other 4 classes correspond to common mistakes. Participants were supervised by an experienced weight lifter to make sure the execution complied to the manner they were supposed to simulate. The exercises were performed by six male participants aged between 20-28 years, with little weight lifting experience. We made sure that all participants could easily simulate the mistakes in a safe and controlled manner by using a relatively light dumbbell (1.25kg).
+
+
+## Analysis
+
+Since the variable we are trying to predict
+is qualitative, it doesn't make much sense to use linear regression here.
+We'll begin with a decision tree.
+
+### Part 1: exploratory analysis.
+
+Downloading etc.:
+
+```{r cache=TRUE, echo=TRUE, message=TRUE}
+library(ggplot2)
+library(knitr)
+library(rpart)
+library(caret)
+library(lattice)
+library(rpart.plot)
+library(rattle)
+library(plyr)
+library(survival)
+
+if (!file.exists("pml-training.csv")) { 
+        url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+        download.file(url,"pml-training.csv", method="curl")       
+}
+
+if (!file.exists("pml-testing.csv")) { 
+        url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+        download.file(url,"pml-testing.csv", method="curl")       
+}
+
+D <- read.csv("pml-training.csv")
+T <- read.csv("pml-testing.csv")
+#dim(D)
+#summary(D)
+#names(D)
+#unique(D$classe)
+set.seed(2603)
+```
+
+Creating the testing and the training sets (we are removing
+the first 7 variables because they identify the subject,
+the time etc. - things not relevant to prediction).
+```{r}
+training <- D[,8:160]
+testing <- T[,8:160]
+types <- data.frame(var=names(testing),type=as.character(lapply(testing,class)))
+head(types)
+head(testing[,1:8])
+```
+
+As we see, a lot of variables do not actually have any values.
+As it happens, only relevant variables are those numberic ones.
+We'll re-define the training and the testing sets:
+```{r}
+relevant_var <- (types$type=='numeric')|(types$type=='integer')
+training <- training[,relevant_var]
+training$classe <- D$classe
+testing <- testing[,relevant_var]
+dim(training)
+dim(testing)
+```
+
+## We'll use a decision tree to figure out which variables are important
+
+Folds don't work very well here.
+
+```{r cache=TRUE}
+modTree <- train(classe ~ ., method="rpart", data=training)
+fancyRpartPlot(modTree$finalModel)
+var.imp <- varImp(modTree)
+print(var.imp)
+```
+
+I tried several times and the set of 14 relevant variables is
+always the same, so we'll use these 14 in order to create our model.
+We'll now remove all but these 14 variables from the training
+and the test sets. We'll also make a dot plot
+of the two most important variables
+colored by the class.
+
+```{r cache=TRUE}
+good.var <- row.names(var.imp$importance)[1:14]
+qplot(data=training, x=magnet_dumbbell_y, y=pitch_forearm, colour=classe)
+```
+
+However, any particular decision tree itself has a very low accuracy.
+We'll try a boosting algorithm based 
+
+## The boosting model.
+
+### Creating the model
+
+We'll use a 'GBM' model because it is also based on trees
+so it seems reasonable to combine it with the variables
+that we got from obtaining a simple decision tree.
+
+First, we'll create a training subset
+and a validation set to be able to estimate the accuracy
+of our algorithm later.
+
+```{r cache=TRUE}
+inTrain <- createDataPartition(y=training$classe,
+                               p=0.7, list=FALSE)
+training.set <- training[inTrain,]
+validation.set <- training[-inTrain,]
+dim(training.set)
+dim(validation.set)
+training.set <- training.set[,c(good.var,"classe")]
+validation.set <- validation.set[,c(good.var,"classe")]
+testing <- testing[,c(good.var,"problem_id")]
+```
+
+### Estimating accuracy of the model
+
+We'll predict the class on the validation set and
+compare with the known answer:
+
+```{r cache=TRUE, results="hide"}
+modGBM <- train(classe ~ ., method="gbm",data=training.set)
+print(modGBM)
+
+predictGBM <- predict(modGBM, newdata=validation.set)
+C <- confusionMatrix(predictGBM,validation.set$classe)
+```
+
+Here is the whole confusion matrix
+```{r cache=TRUE}
+C$table
+```
+
+The overall accuracy is `{r} C$overall[1]`.
+
+### System info
+
+Our analysis has been originally created and run
+in RStudio v. 0.98.1080 under OS X 10.9.5.
+
+Time and date the report has been generated:
+`r Sys.time()` (Central European time).
+
+### Required packages
+
+We used packages ``ggplot2``, ``caret``, ``knitr``, ``rattle`` and
